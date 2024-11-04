@@ -1,0 +1,74 @@
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import confusion_matrix, classification_report
+from tensorflow.keras import layers, models
+import matplotlib.pyplot as plt
+
+ecg_dataset = pd.read_csv("C:/Users/mbhad/OneDrive/Desktop/dl/ecg.csv")
+scaler = StandardScaler()
+X = scaler.fit_transform(ecg_dataset.values)
+y = X  # Autoencoder input and output are the same
+
+X_train, X_test, _, _ = train_test_split(X, X, test_size=0.2, random_state=42)
+
+input_dim = X_train.shape[1]
+
+encoder = models.Sequential([
+    layers.Input(shape=(input_dim,)),
+    layers.Dense(32, activation='relu'),
+    layers.Dense(16, activation='relu'),
+    layers.Dense(8, activation='relu')
+])
+
+decoder = models.Sequential([
+    layers.Input(shape=(8,)),
+    layers.Dense(16, activation='relu'),
+    layers.Dense(32, activation='relu'),
+    layers.Dense(input_dim, activation='linear')  # Use linear activation for reconstruction
+])
+
+autoencoder = models.Sequential([
+    encoder,
+    decoder
+])
+autoencoder.compile(optimizer='adam', loss='mean_squared_error')
+autoencoder.fit(X_train, X_train, epochs=100, batch_size=32, shuffle=True)
+
+y_pred = autoencoder.predict(X_test)
+mse = np.mean(np.power(X_test - y_pred, 2), axis=1)
+
+threshold=np.percentile(mse,95)
+anomalies=mse>threshold
+num_anomalies = np.sum(anomalies)
+print(f"Number of Anomalies: {num_anomalies}")
+
+
+plt.figure(figsize=(12, 6))
+plt.plot(mse, marker='o', linestyle='', markersize=3, label='MSE')
+plt.axhline(threshold, color='r', linestyle='--', label='Anomaly Threshold')
+plt.xlabel('Sample Index')
+plt.ylabel('MSE')
+plt.title('Anomaly Detection Results')
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.plot(X_test[0], label='Original ECG')
+plt.plot(y_pred[0], label='Reconstructed ECG')
+plt.xlabel('Time')
+plt.ylabel('Amplitude')
+plt.legend()
+plt.title('Normal ECG')
+plt.show()
+
+
+y_true = np.zeros(len(X_test))
+print("Confusion Matrix:")
+print(confusion_matrix(anomalies, anomalies))
+
+print("\nClassification Report:")
+print(classification_report(anomalies, anomalies))
+
